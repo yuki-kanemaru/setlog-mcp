@@ -10,7 +10,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
-from . import __version__, client, config, crypto, history, posting, upload
+from . import __version__, client, config, crypto, history, media, posting, upload
 from .posting import VideoInput
 
 mcp = FastMCP(
@@ -188,6 +188,35 @@ def search_posts_by_date(
 def prepare_video_batch(videos: list[VideoInput]) -> dict[str, Any]:
     """動画・投稿先・コメントを1〜50件まとめて準備する。送信せず、各本文とjob_idsを返す。"""
     return _invoke(posting.prepare_video_batch, videos, writing=True)
+
+
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=True
+    )
+)
+def save_log_media(
+    collection_id: str,
+    sender: str = "",
+    start_date: str = "",
+    end_date: str = "",
+    output_dir: str = "",
+    limit: int = 200,
+    timezone_name: str = "Asia/Tokyo",
+    day_start_hour: int = 4,
+) -> dict[str, Any]:
+    """ログの投稿動画を個別ファイルとして保存する。senderは表示名またはユーザーID。保存不可の投稿はスキップする。"""
+    return _invoke(
+        media.save_log_media,
+        collection_id,
+        sender,
+        start_date,
+        end_date,
+        output_dir,
+        limit,
+        timezone_name,
+        day_start_hour,
+    )
 
 
 @mcp.tool(annotations=WRITE)

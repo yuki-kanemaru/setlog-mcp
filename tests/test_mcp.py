@@ -30,6 +30,7 @@ EXPECTED_TOOLS = {
     "schedule_videos",
     "list_scheduled_posts",
     "cancel_scheduled_post",
+    "save_log_media",
 }
 
 
@@ -47,6 +48,9 @@ async def test_tool_schema_and_annotations():
         assert "comment" not in mapping["prepare_video"].inputSchema["required"]
         assert mapping["search_posts_by_date"].annotations.readOnlyHint is True
         assert mapping["schedule_videos"].annotations.readOnlyHint is False
+        assert "collection_id" in mapping["save_log_media"].inputSchema["required"]
+        assert mapping["save_log_media"].inputSchema["properties"]["sender"]["default"] == ""
+        assert mapping["save_log_media"].annotations.readOnlyHint is False
         assert "videos" in mapping["prepare_video_batch"].inputSchema["required"]
 
 
