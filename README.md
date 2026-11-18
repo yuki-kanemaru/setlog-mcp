@@ -4,7 +4,7 @@
 
 メールコード認証、スマホ承認による既存の暗号鍵の引き継ぎ、投稿先一覧、動画の準備・添付・読み戻しに対応します。公式の[MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk)を使い、stdioで接続します。
 
-現在の対応環境は **Windows / Python 3.11〜3.14 / MP4** です。認証情報と暗号鍵の保管にはWindowsのDPAPIを使用します。macOSとLinuxでのアカウント操作は未対応です。
+現在の対応環境は **Windows / Linux / Python 3.11〜3.14 / MP4** です。認証情報と暗号鍵の保管には、WindowsではDPAPI、LinuxではAES-GCM（保存先フォルダ内の鍵ファイル）を使用します。macOSでのアカウント操作は未対応です。
 
 ## できること
 
@@ -34,6 +34,19 @@ py -3.11 -m venv .venv
 
 Python 3.12〜3.14を使う場合は、`py -3.11` のバージョンを変更できます。
 
+### Linux へのインストール
+
+`ffprobe` を含むFFmpegをディストリビューションのパッケージ等でインストールし、PATHに追加してください。
+
+```bash
+git clone https://github.com/shirafukayayoi/setlog-mcp.git
+cd setlog-mcp
+python3 -m venv .venv
+.venv/bin/python -m pip install .
+```
+
+実行ファイルは `.venv/bin/setlog-mcp` です（Windowsの `.\.venv\Scripts\setlog-mcp.exe` に相当）。以降の説明で `.\.venv\Scripts\` とある箇所は、Linuxでは `.venv/bin/` に読み替えてください。
+
 ### アプリ用APIキー
 
 このリポジトリには、setlogのアプリ用APIキー、APK、逆コンパイルしたソース、個人の認証データを含めていません。
@@ -41,7 +54,7 @@ Python 3.12〜3.14を使う場合は、`py -3.11` のバージョンを変更で
 自分で用意したアプリ用APIキーを、次のいずれかで設定してください。
 
 1. `SETLOG_API_KEY` 環境変数をMCPサーバープロセスへ渡す。
-2. 次のコマンドで入力する。入力内容は表示されず、DPAPIで暗号化して保存されます。
+2. 次のコマンドで入力する。入力内容は表示されず、WindowsではDPAPI、LinuxではAES-GCMで暗号化して保存されます。
 
 ```powershell
 .\.venv\Scripts\setlog-mcp.exe configure
@@ -72,6 +85,8 @@ stdioサーバーとして、インストールした実行ファイルを登録
 }
 ```
 
+Linuxの場合は、`command` に `.venv/bin/setlog-mcp` の絶対パスを指定します。
+
 サーバーはHTTPポートを開きません。標準出力はMCP通信に使います。
 
 ## 初回の本人認証
@@ -81,7 +96,7 @@ stdioサーバーとして、インストールした実行ファイルを登録
 3. 届いた確認コードを `verify_email_login` に渡す。
 4. スマホのsetlogで「アカウント → 別の端末に移行」を開く。
 5. 表示された8桁コードを `claim_key_transfer` に渡す。
-6. スマホで `setlog-mcp (Windows)` への引き継ぎを承認する。
+6. スマホで `setlog-mcp (Windows)` への引き継ぎを承認する（Linuxでも、端末名は互換性のためこの名前で表示されます）。
 7. `check_key_transfer` で鍵の受信と登録鍵との一致を確認する。
 
 認証と鍵の引き継ぎは、保存先を同じにしている限り通常の添付ごとに繰り返す必要はありません。認証の有効性は `get_profile` で確認できます。コード認証の結果が新規登録を要求する場合、アカウントを作らず停止します。
@@ -162,7 +177,7 @@ stdioサーバーとして、インストールした実行ファイルを登録
 
 この例では1本目を日本時間20時、2本目を20時5分に予約します。1本だけの予約も同じツールで指定できます。時差のない日時、過去の日時、負の投稿間隔は受け付けません。予約一覧の `publish_at` はUTCの `Z` 形式で返します。
 
-**予約の実行には、同じWindowsユーザーでワーカーを起動しておく必要があります。** MCPクライアントを閉じても、ワーカーが動いていれば実行を続けます。
+**予約の実行には、同じユーザーでワーカーを起動しておく必要があります。** MCPクライアントを閉じても、ワーカーが動いていれば実行を続けます。
 
 ```powershell
 .\.venv\Scripts\setlog-worker.exe
@@ -176,7 +191,7 @@ stdioサーバーとして、インストールした実行ファイルを登録
 .\.venv\Scripts\setlog-worker.exe --once
 ```
 
-Windowsのタスクスケジューラで定期実行する場合は、同じWindowsユーザーの「ログオンしているときのみ実行」を選び、仮想環境の `setlog-worker.exe` と引数 `--once` を登録できます。複数のワーカーやMCPが同じ保存先へ書き込む場合は、操作ロックで重複実行を防ぎます。競合時は次回の確認へ回します。
+Windowsのタスクスケジューラで定期実行する場合は、同じWindowsユーザーの「ログオンしているときのみ実行」を選び、仮想環境の `setlog-worker.exe` と引数 `--once` を登録できます。Linuxでは、systemdのユーザーサービスやcronで `.venv/bin/setlog-worker --once` を定期実行できます。複数のワーカーやMCPが同じ保存先へ書き込む場合は、操作ロックで重複実行を防ぎます。競合時は次回の確認へ回します。
 
 `list_scheduled_posts` で状態を確認し、返された `schedule_id` を `cancel_scheduled_post` へ渡すと取り消せます。`worker_last_seen` はワーカーが最後に確認した日時であり、現在の稼働を保証する値ではありません。
 
@@ -244,12 +259,14 @@ Windowsのタスクスケジューラで定期実行する場合は、同じWind
 
 ## 設定と保存先
 
-既定の保存先は `%LOCALAPPDATA%\setlog-mcp` です。トークン、秘密鍵、準備データのJSONはDPAPIで暗号化します。動画本体はアプリ互換の暗号化を行った状態で保存します。
+既定の保存先は、Windowsでは `%LOCALAPPDATA%\setlog-mcp`、Linuxでは `$XDG_DATA_HOME/setlog-mcp`（未設定の場合は `~/.local/share/setlog-mcp`）です。トークン、秘密鍵、準備データのJSONは、WindowsではDPAPI、LinuxではAES-GCMで暗号化します。動画本体はアプリ互換の暗号化を行った状態で保存します。
+
+Linuxの保護鍵は、保存先フォルダ内の `.protect.key`（権限600）に置かれます。DPAPIとは異なり鍵が暗号文と同じフォルダに在るため、保存先フォルダ自体のアクセス管理が重要です。WindowsとLinuxの保存データに互換性はなく、OSをまたいで読み替えることはできません。別のOSへ移る場合は、その環境で認証と鍵の引き継ぎをやり直してください。
 
 | 環境変数 | 内容 | 既定値 |
 | --- | --- | --- |
 | `SETLOG_API_KEY` | 自分で用意したアプリ用APIキー | 設定コマンドで保管した値 |
-| `SETLOG_MCP_STATE_DIR` | 保存先の絶対パス | `%LOCALAPPDATA%\setlog-mcp` |
+| `SETLOG_MCP_STATE_DIR` | 保存先の絶対パス | OSごとの既定の保存先 |
 | `SETLOG_MCP_REGION` | 動画の保存地域 | `ap-northeast-2` |
 | `SETLOG_MCP_COUNTRY` | 撮影国の2文字コード | 未設定なら送信しない |
 | `SETLOG_MCP_FFPROBE` | ffprobeの実行ファイル | `ffprobe` |

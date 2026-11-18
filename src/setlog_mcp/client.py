@@ -37,10 +37,55 @@ class _Blob(ctypes.Structure):
     _fields_ = [("size", wintypes.DWORD), ("data", ctypes.POINTER(ctypes.c_ubyte))]
 
 
+_PROTECT_MAGIC = b"SLP1"
+_PROTECT_KEY_NAME = ".protect.key"
+
+
+def _load_or_create_protect_key() -> bytes:
+    """状態フォルダ内の鍵ファイルからセッション保護鍵を取得し、無ければ作成する。"""
+    state = config.state_directory()
+    state.mkdir(parents=True, exist_ok=True, mode=0o700)
+    key_path = state / _PROTECT_KEY_NAME
+    try:
+        descriptor = os.open(key_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        key = key_path.read_bytes()
+    else:
+        key = os.urandom(32)
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(key)
+            stream.flush()
+            os.fsync(stream.fileno())
+    if len(key) != 32:
+        raise SetlogError("セッション保護鍵の読み込みに失敗しました。")
+    return key
+
+
+def _protect_aesgcm(raw: bytes, decrypt: bool = False) -> bytes:
+    """Windows以外では、状態フォルダ内の鍵によるAES-GCMでセッション情報を保護する。
+
+    暗号文の形式は b"SLP1" + nonce(12バイト) + AESGCM暗号文。
+    """
+    from cryptography.exceptions import InvalidTag
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    aesgcm = AESGCM(_load_or_create_protect_key())
+    header_size = len(_PROTECT_MAGIC) + 12
+    if decrypt:
+        if len(raw) <= header_size or not raw.startswith(_PROTECT_MAGIC):
+            raise SetlogError("保存データが想定する保護形式（SLP1）ではありません。復号を中止しました。")
+        try:
+            return aesgcm.decrypt(raw[len(_PROTECT_MAGIC) : header_size], raw[header_size:], None)
+        except InvalidTag:
+            raise SetlogError("保存データの復号に失敗しました。保護鍵が異なる可能性があります。") from None
+    nonce = os.urandom(12)
+    return _PROTECT_MAGIC + nonce + aesgcm.encrypt(nonce, raw, None)
+
+
 def _protect(raw: bytes, decrypt: bool = False) -> bytes:
-    """現在のWindowsユーザーのDPAPIでセッション情報を保護する。"""
+    """セッション情報を保護する。WindowsではDPAPI、それ以外ではAES-GCMを使う。"""
     if sys.platform != "win32":
-        raise SetlogError("セッションの保管にはWindowsのDPAPIが必要です。")
+        return _protect_aesgcm(raw, decrypt=decrypt)
     source_buffer = ctypes.create_string_buffer(raw)
     source = _Blob(len(raw), ctypes.cast(source_buffer, ctypes.POINTER(ctypes.c_ubyte)))
     target = _Blob()
