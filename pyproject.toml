@@ -33,8 +33,8 @@ setlog-worker = "setlog_mcp.worker:main"
 setlog-web = "setlog_web.__main__:main"
 
 [project.urls]
-Repository = "https://github.com/shirafukayayoi/setlog-mcp"
-Issues = "https://github.com/shirafukayayoi/setlog-mcp/issues"
+Repository = "https://github.com/yuki-kanemaru/setlog-mcp"
+Issues = "https://github.com/yuki-kanemaru/setlog-mcp/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]

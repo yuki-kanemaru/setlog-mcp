@@ -28,7 +28,7 @@
 FFmpegに含まれる `ffprobe` をインストールし、PATHに追加してください。
 
 ```powershell
-git clone https://github.com/shirafukayayoi/setlog-mcp.git
+git clone https://github.com/yuki-kanemaru/setlog-mcp.git
 cd setlog-mcp
 py -3.11 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install .
