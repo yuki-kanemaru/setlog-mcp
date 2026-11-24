@@ -8,123 +8,146 @@
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<div class="glow"></div>
 
-<header class="topbar">
-  <div class="brand">
-    <span class="brand-mark"></span>
-    <span class="brand-name">setlog</span>
-    <span class="brand-sub">PC</span>
-  </div>
-  <div class="who" id="who"></div>
-  <div class="top-actions">
-    <button class="ghost" id="btn-refresh">更新</button>
-    <button class="ghost" id="btn-cache">キャッシュ</button>
-    <button class="primary" id="btn-post">投稿</button>
+<header class="app-bar">
+  <div class="app-bar__inner">
+    <div class="brand">
+      <span class="brand__mark" aria-hidden="true"></span>
+      <span class="brand__name">setlog</span>
+      <span class="brand__tag">PC</span>
+    </div>
+    <p class="app-bar__user" id="who"></p>
+    <div class="app-bar__actions">
+      <button class="btn btn--ghost" id="btn-refresh" type="button">更新</button>
+      <button class="btn btn--ghost" id="btn-cache" type="button">保存容量</button>
+      <button class="btn btn--primary" id="btn-post" type="button">動画を投稿</button>
+    </div>
   </div>
 </header>
 
-<main class="layout">
-  <aside class="sidebar">
-    <div class="side-title">Log</div>
-    <div class="collections" id="collections"></div>
-    <div class="side-foot" id="side-foot"></div>
-  </aside>
+<div class="shell">
+  <nav class="sidebar" aria-label="ログ一覧">
+    <h2 class="sidebar__title">ログ</h2>
+    <ul class="log-list" id="collections"></ul>
+    <p class="sidebar__foot" id="side-foot"></p>
+  </nav>
 
-  <section class="content">
-    <div class="daybar" id="daybar"></div>
-    <div class="content-head">
-      <div>
-        <h1 id="collection-title">読み込み中…</h1>
-        <div class="meta" id="collection-meta"></div>
+  <main class="main">
+    <div class="page-head">
+      <div class="page-head__text">
+        <h1 class="page-title" id="collection-title">読み込み中</h1>
+        <p class="page-meta" id="collection-meta"></p>
       </div>
-      <div class="head-actions">
-        <button class="ghost small" id="btn-prev">◀ 前日</button>
-        <button class="ghost small" id="btn-next">翌日 ▶</button>
+      <div class="page-head__actions">
+        <button class="btn btn--ghost btn--sm" id="btn-prev" type="button">前日</button>
+        <button class="btn btn--ghost btn--sm" id="btn-next" type="button">翌日</button>
       </div>
     </div>
-    <div class="grid" id="grid"></div>
-    <div class="empty hidden" id="empty">この日の投稿はまだありません。</div>
-    <div class="section-head hidden" id="chat-head">チャット <span id="chat-count"></span></div>
-    <div class="chatlist" id="chatlist"></div>
-    <div class="loadmore"><button class="ghost hidden" id="btn-more">もっと見る</button></div>
-  </section>
-</main>
 
-<div class="modal hidden" id="viewer">
-  <div class="viewer-card">
-    <button class="close" data-close>✕</button>
-    <div class="viewer-stage">
+    <div class="daystrip" id="daybar" role="group" aria-label="表示する日"></div>
+
+    <section class="grid" id="grid" aria-label="この日の動画"></section>
+    <p class="empty hidden" id="empty">この日の投稿はまだありません。</p>
+
+    <section class="chats" id="chat-section" aria-labelledby="chat-heading">
+      <h2 class="section-title hidden" id="chat-heading">チャット <span class="section-count" id="chat-count"></span></h2>
+      <ul class="chat-list" id="chatlist"></ul>
+    </section>
+
+    <div class="more">
+      <button class="btn btn--ghost hidden" id="btn-more" type="button">さらに読み込む</button>
+    </div>
+  </main>
+</div>
+
+<div class="modal hidden" id="viewer" role="dialog" aria-modal="true" aria-labelledby="viewer-title">
+  <div class="viewer">
+    <button class="icon-btn viewer__close" data-close type="button" aria-label="閉じる">✕</button>
+    <div class="viewer__stage">
       <video id="viewer-video" playsinline loop controls></video>
-      <div class="viewer-fallback hidden" id="viewer-fallback">再生できませんでした。</div>
+      <p class="viewer__fallback hidden" id="viewer-fallback">この動画は再生できません。</p>
     </div>
-    <div class="viewer-side">
-      <div class="post-head">
-        <span class="sender" id="v-sender"></span>
-        <span class="time" id="v-time"></span>
-      </div>
-      <p class="caption" id="v-caption"></p>
+    <div class="viewer__panel">
+      <header class="post-head">
+        <h2 class="post-head__sender" id="viewer-title">投稿</h2>
+        <p class="post-head__time" id="v-time"></p>
+      </header>
+      <p class="post-caption" id="v-caption"></p>
+
       <div class="reactions" id="v-reactions"></div>
-      <div class="reply-title">返信 <span id="v-reply-count"></span></div>
-      <div class="reply-list" id="v-replies"></div>
+
+      <section class="replies" aria-labelledby="replies-title">
+        <h3 class="replies__title" id="replies-title">返信 <span class="replies__count" id="v-reply-count"></span></h3>
+        <div class="replies__list" id="v-replies"></div>
+      </section>
+
       <form class="reply-form" id="v-reply-form">
-        <input id="v-reply-input" maxlength="500" placeholder="返信を書く…" autocomplete="off">
-        <button class="primary" type="submit">送信</button>
+        <label class="field-label" for="v-reply-input">返信を書く</label>
+        <div class="reply-form__row">
+          <input class="input" id="v-reply-input" maxlength="500" autocomplete="off" placeholder="例: いいね、どこ？">
+          <button class="btn btn--primary" type="submit">送信</button>
+        </div>
       </form>
-      <div class="viewer-foot">
-        <button class="ghost small hidden" id="v-delete">この投稿を削除</button>
+
+      <div class="viewer__foot">
+        <button class="btn btn--quiet-danger hidden" id="v-delete" type="button">この投稿を削除</button>
       </div>
     </div>
   </div>
 </div>
 
-<div class="modal hidden" id="composer">
-  <div class="composer-card">
-    <header>
-      <h2>投稿する</h2>
-      <button class="close" data-close>✕</button>
+<div class="modal hidden" id="composer" role="dialog" aria-modal="true" aria-labelledby="composer-title">
+  <div class="dialog">
+    <header class="dialog__head">
+      <h2 class="dialog__title" id="composer-title">動画を投稿</h2>
+      <button class="icon-btn" data-close type="button" aria-label="閉じる">✕</button>
     </header>
+
     <div class="drop" id="drop">
-      <input type="file" id="file" accept="video/*">
-      <div class="drop-hint" id="drop-hint">
-        <strong>動画をドロップ</strong>
-        <span>またはクリックして選択（MP4 / MOV）</span>
+      <input type="file" id="file" accept="video/*" aria-label="投稿する動画を選ぶ">
+      <div class="drop__hint" id="drop-hint">
+        <span class="drop__title">動画を選ぶ</span>
+        <span class="drop__note">ここにドロップするか、クリックして MP4 / MOV を選択</span>
       </div>
-      <video id="local-preview" muted loop playsinline class="hidden"></video>
-      <div class="upload-bar-wrap hidden" id="upload-wrap"><div class="upload-bar" id="upload-bar"></div></div>
+      <video id="local-preview" muted loop playsinline class="drop__preview hidden"></video>
+      <div class="drop__progress hidden" id="upload-wrap"><div class="drop__bar" id="upload-bar"></div></div>
     </div>
-    <label class="field">
-      <span>投稿先</span>
-      <select id="dest"></select>
-    </label>
-    <label class="field">
-      <span>コメント</span>
-      <textarea id="comment" maxlength="500" rows="3" placeholder="動画に添える一言（任意）"></textarea>
-    </label>
-    <div class="preview hidden" id="preview"></div>
-    <footer>
-      <span class="hint" id="composer-status"></span>
-      <button class="primary" id="btn-prepare">準備する</button>
-      <button class="primary hidden" id="btn-send">送信する</button>
+
+    <div class="field">
+      <label class="field-label" for="dest">投稿先</label>
+      <select class="input" id="dest"></select>
+    </div>
+
+    <div class="field">
+      <label class="field-label" for="comment">コメント（任意）</label>
+      <textarea class="input" id="comment" maxlength="500" rows="3" placeholder="動画に添える一言"></textarea>
+    </div>
+
+    <div class="result hidden" id="preview" aria-live="polite"></div>
+
+    <footer class="dialog__foot">
+      <p class="dialog__status" id="composer-status"></p>
+      <button class="btn btn--primary" id="btn-prepare" type="button">準備する</button>
+      <button class="btn btn--primary hidden" id="btn-send" type="button">送信する</button>
     </footer>
   </div>
 </div>
 
-<div class="modal hidden" id="cache-modal">
-  <div class="composer-card small-card">
-    <header>
-      <h2>キャッシュ</h2>
-      <button class="close" data-close>✕</button>
+<div class="modal hidden" id="cache-modal" role="dialog" aria-modal="true" aria-labelledby="cache-title">
+  <div class="dialog dialog--sm">
+    <header class="dialog__head">
+      <h2 class="dialog__title" id="cache-title">保存容量</h2>
+      <button class="icon-btn" data-close type="button" aria-label="閉じる">✕</button>
     </header>
-    <div id="cache-body" class="cache-body"></div>
-    <footer>
-      <button class="ghost" id="btn-clear-cache">削除する</button>
-      <button class="primary" data-close>閉じる</button>
+    <div class="cache-body" id="cache-body"></div>
+    <footer class="dialog__foot">
+      <button class="btn btn--ghost" id="btn-clear-cache" type="button">キャッシュを削除</button>
+      <button class="btn btn--primary" data-close type="button">閉じる</button>
     </footer>
   </div>
 </div>
 
-<div class="toast hidden" id="toast"></div>
+<div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
 <script src="/static/app.js"></script>
 </body>
 </html>

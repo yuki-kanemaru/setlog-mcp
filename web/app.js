@@ -1,4 +1,4 @@
-/* setlog PC Web — 画面ロジック（フレームワークなし） */
+/* setlog PC — 画面ロジック（フレームワークなし） */
 'use strict';
 
 const TOKEN = document.querySelector('meta[name="setlog-token"]').content;
@@ -23,14 +23,13 @@ const state = {
 /* ---------------- API ---------------- */
 
 async function api(path, options = {}) {
-  const { method = 'GET', body = null, blob = null, headers = {} } = options;
+  const { method = 'GET', body = null, headers = {} } = options;
   const init = { method, headers: { ...headers } };
   if (method !== 'GET') init.headers['x-setlog-token'] = TOKEN;
   if (body !== null) {
     init.headers['Content-Type'] = 'application/json';
     init.body = JSON.stringify(body);
   }
-  if (blob !== null) init.body = blob;
   const response = await fetch(path, init);
   let payload = null;
   try { payload = await response.json(); } catch { payload = null; }
@@ -46,7 +45,7 @@ async function api(path, options = {}) {
 function toast(message, kind = '') {
   const el = $('toast');
   el.textContent = message;
-  el.className = 'toast ' + kind;
+  el.className = 'toast' + (kind ? ` is-${kind}` : '');
   clearTimeout(toast._timer);
   toast._timer = setTimeout(() => el.classList.add('hidden'), kind === 'error' ? 6000 : 3200);
 }
@@ -60,7 +59,15 @@ function formatTime(iso) {
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
-/* ---------------- boot ---------------- */
+function escapeHtml(value) {
+  return String(value || '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+}
+
+/* ---------------- 起動 ---------------- */
 
 async function boot() {
   try {
@@ -77,7 +84,7 @@ async function boot() {
     $('who').textContent = state.profile ? state.profile.name || '' : '';
     if (!status.authenticated) {
       $('who').textContent = '未認証';
-      toast('setlogの認証を確認できません。DSHのsetlog MCPで状態を確認してください。', 'error');
+      toast('setlogの認証を確認できません。時間をおいて更新してください。', 'error');
     }
     renderDays();
     renderCollections();
@@ -88,7 +95,7 @@ async function boot() {
     } else {
       $('grid').innerHTML = '';
       $('empty').classList.remove('hidden');
-      $('empty').textContent = '参加しているLogがありません。';
+      $('empty').textContent = '参加しているログがありません。';
     }
   } catch (error) {
     toast(`読み込みに失敗しました: ${error.message}`, 'error');
@@ -96,32 +103,26 @@ async function boot() {
 }
 
 function renderFoot(options) {
-  const cache = options && options.ffmpeg ? 'ffmpeg: 利用可' : 'ffmpeg: 未検出';
-  $('side-foot').innerHTML = `${state.collections.length}件のLog<br>${cache}`;
+  const ffmpeg = options && options.ffmpeg ? '動画の変換: 利用可' : '動画の変換: 未検出';
+  $('side-foot').innerHTML = `${state.collections.length}件のログ<br>${ffmpeg}`;
 }
 
 function renderDays() {
   const bar = $('daybar');
   bar.innerHTML = '';
-  const latest = document.createElement('div');
-  latest.className = 'day' + (state.date === '' ? ' active' : '');
-  latest.innerHTML = '<div class="d">最新</div><div class="w">履歴</div>';
-  latest.onclick = () => {
-    state.date = '';
-    renderDays();
-    loadFeed({});
-  };
-  bar.appendChild(latest);
-  for (const day of state.days) {
-    const el = document.createElement('div');
-    el.className = 'day' + (day.date === state.date ? ' active' : '');
-    el.innerHTML = `<div class="d">${day.label}</div><div class="w">${day.weekday}</div>`;
-    el.onclick = () => {
-      state.date = day.date;
+  const items = [{ date: '', label: '最新', weekday: '履歴' }, ...state.days.map((day) => ({ date: day.date, label: day.label, weekday: day.weekday }))];
+  for (const item of items) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'day' + (item.date === state.date ? ' is-active' : '');
+    button.setAttribute('aria-pressed', item.date === state.date ? 'true' : 'false');
+    button.innerHTML = `<span class="day__label">${escapeHtml(item.label)}</span><span class="day__weekday">${escapeHtml(item.weekday)}</span>`;
+    button.onclick = () => {
+      state.date = item.date;
       renderDays();
-      loadFeed({ date: day.date });
+      loadFeed(item.date ? { date: item.date } : {});
     };
-    bar.appendChild(el);
+    bar.appendChild(button);
   }
 }
 
@@ -129,40 +130,39 @@ function renderCollections() {
   const list = $('collections');
   list.innerHTML = '';
   for (const item of state.collections) {
-    const el = document.createElement('div');
-    el.className = 'collection' + (state.current === item.id ? ' active' : '');
-    el.dataset.id = item.id;
+    const li = document.createElement('li');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'log-item' + (state.current === item.id ? ' is-active' : '');
+    button.dataset.id = item.id;
+    if (state.current === item.id) button.setAttribute('aria-current', 'true');
     const initial = (item.name || '?').trim().charAt(0) || '?';
     const people = item.participants ? `${item.participants + 1}人` : 'ひとり';
-    el.innerHTML = `<div class="avatar">${escapeHtml(initial)}</div>
-      <div class="label"><div class="name">${escapeHtml(item.name)}</div><div class="sub">${people}</div></div>`;
-    el.onclick = () => selectCollection(item.id);
-    list.appendChild(el);
+    button.innerHTML = `<span class="log-item__avatar" aria-hidden="true">${escapeHtml(initial)}</span>
+      <span class="log-item__text"><span class="log-item__name">${escapeHtml(item.name)}</span><span class="log-item__meta">${people}</span></span>`;
+    button.onclick = () => selectCollection(item.id);
+    li.appendChild(button);
+    list.appendChild(li);
   }
-}
-
-function escapeHtml(value) {
-  return String(value || '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;');
 }
 
 function selectCollection(id) {
   state.current = id;
   state.posts = [];
   state.nextBefore = null;
-  for (const el of document.querySelectorAll('.collection')) {
-    el.classList.toggle('active', el.dataset.id === id);
+  for (const el of document.querySelectorAll('.log-item')) {
+    const active = el.dataset.id === id;
+    el.classList.toggle('is-active', active);
+    if (active) el.setAttribute('aria-current', 'true');
+    else el.removeAttribute('aria-current');
   }
   const item = state.collections.find((entry) => entry.id === id);
   $('collection-title').textContent = item ? item.name : '';
-  $('collection-meta').textContent = item ? `${item.participants + 1}人のLog` : '';
-  loadFeed({ date: state.date });
+  $('collection-meta').textContent = item ? `${item.participants + 1}人のログ` : '';
+  loadFeed(state.date ? { date: state.date } : {});
 }
 
-/* ---------------- feed ---------------- */
+/* ---------------- 一覧 ---------------- */
 
 async function loadFeed({ date = '', before = null, append = false } = {}) {
   if (!state.current) return;
@@ -171,9 +171,10 @@ async function loadFeed({ date = '', before = null, append = false } = {}) {
   if (before) params.set('before', String(before));
   if (!append) {
     $('grid').innerHTML = '';
-    for (let i = 0; i < 6; i += 1) {
+    for (let index = 0; index < 6; index += 1) {
       const skeleton = document.createElement('div');
       skeleton.className = 'skeleton';
+      skeleton.setAttribute('aria-hidden', 'true');
       $('grid').appendChild(skeleton);
     }
   }
@@ -196,11 +197,10 @@ function renderGrid() {
   const chatlist = $('chatlist');
   grid.innerHTML = '';
   chatlist.innerHTML = '';
+
   const counts = new Map();
   for (const post of state.posts) {
-    if (post.is_reply && post.parent_id) {
-      counts.set(post.parent_id, (counts.get(post.parent_id) || 0) + 1);
-    }
+    if (post.is_reply && post.parent_id) counts.set(post.parent_id, (counts.get(post.parent_id) || 0) + 1);
   }
   state.replyCounts = counts;
 
@@ -215,45 +215,59 @@ function renderGrid() {
 
   for (const post of media) grid.appendChild(videoCard(post));
 
-  $('chat-head').classList.toggle('hidden', chats.length === 0);
+  $('chat-heading').classList.toggle('hidden', chats.length === 0);
   $('chat-count').textContent = chats.length ? `(${chats.length})` : '';
-  for (const post of chats) chatlist.appendChild(chatRow(post));
+  for (const post of chats) {
+    const li = document.createElement('li');
+    li.appendChild(chatRow(post));
+    chatlist.appendChild(li);
+  }
 
   $('btn-more').classList.toggle('hidden', !state.nextBefore);
 }
 
 function videoCard(post) {
-  const card = document.createElement('div');
+  const card = document.createElement('button');
+  card.type = 'button';
   card.className = 'card';
-  const poster = post.poster_url ? `<img src="${post.poster_url}" alt="" loading="lazy">` : '';
+  card.dataset.id = post.message_id;
+
   const replies = state.replyCounts.get(post.message_id) || 0;
   const badges = [];
-  if (post.unread) badges.push('<span class="badge unread">NEW</span>');
-  if (replies) badges.push(`<span class="badge">返信 ${replies}</span>`);
-  const reactions = aggregateReactions(post.reactions);
-  const reactionChips = reactions.slice(0, 3)
-    .map(([text, users]) => `<span class="badge">${escapeHtml(text)} ${users.length}</span>`)
-    .join('');
+  if (post.unread) badges.push('<span class="pill pill--new">新着</span>');
+  if (replies) badges.push(`<span class="pill">返信 ${replies}</span>`);
+
+  const poster = post.poster_url
+    ? `<img src="${post.poster_url}" alt="" loading="lazy">`
+    : '';
   const caption = (post.media.flatMap((item) => item.captions || []).join(' ') || '').trim();
-  card.innerHTML = `${poster}<div class="shine"></div>
-    <div class="badges">${badges.join('')}${reactionChips}</div>
-    <div class="card-body">
-      <div class="card-sender">${escapeHtml(post.sender_name || '')}</div>
-      ${caption ? `<div class="card-caption">${escapeHtml(caption)}</div>` : ''}
-      <div class="card-time">${formatTime(post.posted_at)}</div>
-    </div>`;
-  card.dataset.id = post.message_id;
+  const reactionChips = aggregateReactions(post.reactions)
+    .slice(0, 3)
+    .map(([text, users]) => `<span class="pill">${escapeHtml(text)} ${users.length}</span>`)
+    .join('');
+
+  card.innerHTML = `<span class="card__poster">${poster}<span class="card__badges">${badges.join('')}</span></span>
+    <span class="card__body">
+      <span class="card__top">
+        <span class="card__sender">${escapeHtml(post.sender_name || '')}</span>
+        <span class="card__time">${formatTime(post.posted_at)}</span>
+      </span>
+      ${caption ? `<span class="card__caption">${escapeHtml(caption)}</span>` : ''}
+      ${reactionChips ? `<span class="card__reactions">${reactionChips}</span>` : ''}
+    </span>`;
   card.onclick = () => openViewer(post);
   return card;
 }
 
 function chatRow(post) {
-  const row = document.createElement('div');
-  row.className = 'chatrow' + (post.unread ? ' unread' : '');
-  row.innerHTML = `<span class="who-name">${escapeHtml(post.sender_name || '')}</span>
-    <span class="who-text">${escapeHtml(post.text || (post.text_error ? '（復号できませんでした）' : ''))}</span>
-    <span class="who-time">${formatTime(post.posted_at)}</span>`;
+  const row = document.createElement('button');
+  row.type = 'button';
+  row.className = 'chat' + (post.unread ? ' is-unread' : '');
   row.dataset.id = post.message_id;
+  const body = post.text || (post.text_error ? '（復号できませんでした）' : '');
+  row.innerHTML = `<span class="chat__sender">${escapeHtml(post.sender_name || '')}</span>
+    <span class="chat__text">${escapeHtml(body)}</span>
+    <span class="chat__time">${formatTime(post.posted_at)}</span>`;
   row.onclick = () => openViewer(post);
   return row;
 }
@@ -268,12 +282,12 @@ function aggregateReactions(list) {
   return Array.from(map.entries());
 }
 
-/* ---------------- viewer ---------------- */
+/* ---------------- 詳細 ---------------- */
 
 async function openViewer(post) {
   state.viewer = post;
-  $('viewer').classList.remove('hidden');
-  $('v-sender').textContent = post.sender_name || '';
+  openModal('viewer');
+  $('viewer-title').textContent = post.sender_name || '投稿';
   $('v-time').textContent = new Date(post.timestamp_ms).toLocaleString('ja-JP');
   $('v-caption').textContent = post.kind === 'chat'
     ? post.text || ''
@@ -298,12 +312,13 @@ async function openViewer(post) {
   }
 
   renderViewerReactions(post);
-  $('v-replies').innerHTML = '<div class="reply"><div class="r-body">読み込み中…</div></div>';
+  $('v-reply-count').textContent = '';
+  $('v-replies').innerHTML = '<p class="reply__body">読み込み中…</p>';
   try {
     const thread = await api(`/api/thread?collection=${encodeURIComponent(state.current)}&parent=${encodeURIComponent(post.message_id)}`);
     renderThread(thread.replies);
   } catch (error) {
-    $('v-replies').innerHTML = `<div class="reply"><div class="r-body">返信を読み込めません: ${escapeHtml(error.message)}</div></div>`;
+    $('v-replies').innerHTML = `<p class="reply__body">返信を読み込めません: ${escapeHtml(error.message)}</p>`;
   }
 }
 
@@ -312,14 +327,17 @@ function renderThread(replies) {
   box.innerHTML = '';
   $('v-reply-count').textContent = replies.length ? `(${replies.length})` : '';
   if (!replies.length) {
-    box.innerHTML = '<div class="reply"><div class="r-body" style="color:var(--dim)">まだ返信はありません。</div></div>';
+    const empty = document.createElement('p');
+    empty.className = 'reply__body';
+    empty.textContent = 'まだ返信はありません。';
+    box.appendChild(empty);
     return;
   }
   for (const reply of replies) {
-    const el = document.createElement('div');
+    const el = document.createElement('article');
     el.className = 'reply';
-    el.innerHTML = `<div class="r-head"><span>${escapeHtml(reply.sender_name || '')}</span><span>${formatTime(reply.posted_at)}</span></div>
-      <div class="r-body">${escapeHtml(reply.text || '')}</div>`;
+    el.innerHTML = `<p class="reply__head"><span>${escapeHtml(reply.sender_name || '')}</span><span>${formatTime(reply.posted_at)}</span></p>
+      <p class="reply__body">${escapeHtml(reply.text || '')}</p>`;
     box.appendChild(el);
   }
   box.scrollTop = box.scrollHeight;
@@ -331,20 +349,24 @@ function renderViewerReactions(post) {
   const grouped = aggregateReactions(post.reactions);
   for (const [text, users] of grouped) {
     const mine = users.includes(state.me);
-    const el = document.createElement('button');
-    el.className = 'reaction' + (mine ? ' mine' : '');
-    el.innerHTML = `<span>${escapeHtml(text)}</span><span class="count">${users.length}</span>`;
-    el.onclick = () => toggleReaction(post, text, mine);
-    box.appendChild(el);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'reaction' + (mine ? ' is-mine' : '');
+    button.setAttribute('aria-pressed', mine ? 'true' : 'false');
+    button.innerHTML = `<span>${escapeHtml(text)}</span><span class="reaction__count">${users.length}</span>`;
+    button.onclick = () => toggleReaction(post, text, mine);
+    box.appendChild(button);
   }
   const picker = document.createElement('div');
-  picker.className = 'picker';
+  picker.className = 'reaction-picker';
   for (const emoji of EMOJI) {
+    const mine = (post.own_reactions || []).includes(emoji);
     const button = document.createElement('button');
     button.type = 'button';
     button.textContent = emoji;
-    const mine = (post.own_reactions || []).includes(emoji);
-    button.style.opacity = mine ? '1' : '';
+    button.setAttribute('aria-label', `リアクション ${emoji}`);
+    button.setAttribute('aria-pressed', mine ? 'true' : 'false');
+    if (mine) button.style.borderColor = 'var(--accent)';
     button.onclick = () => toggleReaction(post, emoji, mine);
     picker.appendChild(button);
   }
@@ -361,21 +383,23 @@ async function toggleReaction(post, text, mine) {
     post.own_reactions = result.reactions.filter((item) => item.user_id === state.me).map((item) => item.text);
     renderViewerReactions(post);
     const card = state.posts.find((item) => item.message_id === post.message_id);
-    if (card) { card.reactions = result.reactions; }
+    if (card) card.reactions = result.reactions;
     renderGrid();
   } catch (error) {
     toast(`リアクションを更新できません: ${error.message}`, 'error');
   }
 }
 
-/* ---------------- composer ---------------- */
+/* ---------------- 投稿 ---------------- */
 
 function openComposer() {
   state.upload = null;
   state.prepared = null;
-  $('preview').classList.add('hidden');
-  $('preview').innerHTML = '';
+  const result = $('preview');
+  result.classList.add('hidden');
+  result.innerHTML = '';
   $('btn-send').classList.add('hidden');
+  $('btn-send').disabled = false;
   $('btn-prepare').disabled = false;
   $('composer-status').textContent = '';
   $('upload-wrap').classList.add('hidden');
@@ -394,7 +418,7 @@ function openComposer() {
     if (item.id === state.current) option.selected = true;
     select.appendChild(option);
   }
-  $('composer').classList.remove('hidden');
+  openModal('composer');
 }
 
 function chooseFile(file) {
@@ -449,13 +473,13 @@ async function preparePost() {
   $('btn-prepare').disabled = true;
   $('btn-send').classList.add('hidden');
   try {
-    $('composer-status').textContent = 'アップロード中…';
+    $('composer-status').textContent = 'アップロード中';
     $('upload-wrap').classList.remove('hidden');
     const uploaded = await uploadWithProgress(state.upload, (ratio) => {
       $('upload-bar').style.width = `${Math.round(ratio * 100)}%`;
     });
     $('upload-bar').style.width = '100%';
-    $('composer-status').textContent = '準備中（暗号化）…';
+    $('composer-status').textContent = '準備中（暗号化）';
     const task = await api('/api/jobs/prepare', {
       method: 'POST',
       body: {
@@ -468,14 +492,13 @@ async function preparePost() {
     state.prepared = result;
     const box = $('preview');
     box.classList.remove('hidden');
-    box.innerHTML = `<div><b>準備ID</b> ${escapeHtml(result['準備ID'])}</div>
-      <div><b>投稿先</b> ${escapeHtml(result['投稿先'] || '')}</div>
-      <div><b>受信者数</b> ${result['受信者数']}人</div>
-      <div><b>動画</b> ${escapeHtml(result['動画'] || '')}</div>
-      ${result['コメント'] ? `<div><b>コメント</b> ${escapeHtml(result['コメント'])}</div>` : ''}
-      <div class="warn">まだ送信していません。内容を確認して送信してください。</div>`;
+    box.innerHTML = `<p><strong>準備ID</strong> ${escapeHtml(result['準備ID'])}</p>
+      <p><strong>投稿先</strong> ${escapeHtml(result['投稿先'] || '')}（${result['受信者数']}人）</p>
+      <p><strong>動画</strong> ${escapeHtml(result['動画'] || '')}</p>
+      ${result['コメント'] ? `<p><strong>コメント</strong> ${escapeHtml(result['コメント'])}</p>` : ''}
+      <p class="warn">まだ送信していません。内容を確認して送信してください。</p>`;
     $('btn-send').classList.remove('hidden');
-    $('composer-status').textContent = '準備完了';
+    $('composer-status').textContent = '準備ができました';
   } catch (error) {
     $('composer-status').textContent = '';
     toast(`準備できません: ${error.message}`, 'error');
@@ -489,57 +512,67 @@ async function sendPost() {
   $('btn-send').disabled = true;
   $('btn-prepare').disabled = true;
   try {
-    $('composer-status').textContent = '送信中…（このまま待ってください）';
+    $('composer-status').textContent = '送信中（このまま待ってください）';
     const task = await api(`/api/jobs/${encodeURIComponent(jobId)}/send`, { method: 'POST' });
     const result = await pollTask(task.task_id);
-    $('composer-status').textContent = '送信して読み戻しました';
+    $('composer-status').textContent = '送信しました';
     const box = $('preview');
-    box.innerHTML = `<div class="ok"><b>投稿しました</b></div>
-      <div><b>投稿ID</b> ${escapeHtml(result['投稿ID'] || '')}</div>
-      <div><b>投稿先</b> ${escapeHtml(result['投稿先'] || '')}</div>
-      ${result['コメント'] ? `<div><b>コメント</b> ${escapeHtml(result['コメント'])}</div>` : ''}
-      <div>${escapeHtml(result['状態'] || '')}</div>`;
+    box.innerHTML = `<p class="ok">投稿しました</p>
+      <p><strong>投稿ID</strong> ${escapeHtml(result['投稿ID'] || '')}</p>
+      <p><strong>投稿先</strong> ${escapeHtml(result['投稿先'] || '')}</p>
+      ${result['コメント'] ? `<p><strong>コメント</strong> ${escapeHtml(result['コメント'])}</p>` : ''}
+      <p class="note">${escapeHtml(result['状態'] || '')}</p>`;
     toast('投稿しました。', 'ok');
-    await loadFeed({ date: state.date });
+    await loadFeed(state.date ? { date: state.date } : {});
     setTimeout(() => $('composer').classList.add('hidden'), 1800);
   } catch (error) {
     $('composer-status').textContent = '';
     $('btn-send').disabled = true;
     toast(`送信できませんでした: ${error.message}（再送せず状態を確認してください）`, 'error');
-    const box = $('preview');
-    box.innerHTML += `<div class="warn">結果が不明です。自動再送はしていません。</div>`;
+    $('preview').innerHTML += '<p class="warn">結果が不明です。自動再送はしていません。</p>';
   }
 }
 
-/* ---------------- cache ---------------- */
+/* ---------------- 容量 ---------------- */
 
 async function openCache() {
   const payload = await api('/api/cache');
   const cache = payload.cache;
-  $('cache-body').innerHTML = `<div><b>保存先</b><br>${escapeHtml(cache.dir || '未作成')}</div>
-    <div><b>使用量</b> ${(cache.bytes / 1024 / 1024).toFixed(1)} MB / ${(cache.limit / 1024 / 1024).toFixed(0)} MB（${cache.files}件）</div>
-    <div><b>動画の保存先</b><br>${escapeHtml(payload.save_dir || '')}</div>`;
-  $('cache-modal').classList.remove('hidden');
+  $('cache-body').innerHTML = `<p><strong>キャッシュ</strong><br>${escapeHtml(cache.dir || '未作成')}</p>
+    <p><strong>使用量</strong> ${(cache.bytes / 1024 / 1024).toFixed(1)} MB / ${(cache.limit / 1024 / 1024).toFixed(0)} MB（${cache.files}件）</p>
+    <p><strong>動画の保存先</strong><br>${escapeHtml(payload.save_dir || '')}</p>`;
+  openModal('cache-modal');
 }
 
-/* ---------------- events ---------------- */
+/* ---------------- 操作 ---------------- */
+
+let lastFocus = null;
+
+function openModal(id) {
+  lastFocus = document.activeElement;
+  const modal = $(id);
+  modal.classList.remove('hidden');
+  const first = modal.querySelector('[data-close], input, video, button');
+  if (first) first.focus();
+}
 
 function closeModals() {
   for (const id of ['viewer', 'composer', 'cache-modal']) $(id).classList.add('hidden');
+  if (lastFocus && document.contains(lastFocus)) lastFocus.focus();
+  lastFocus = null;
   const video = $('viewer-video');
   video.pause();
   video.removeAttribute('src');
 }
 
 function bind() {
-  for (const el of document.querySelectorAll('[data-close]')) {
-    el.onclick = closeModals;
-  }
+  for (const el of document.querySelectorAll('[data-close]')) el.onclick = closeModals;
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') closeModals();
   });
+
   $('btn-refresh').onclick = () => {
-    if (state.current) loadFeed({ date: state.date });
+    if (state.current) loadFeed(state.date ? { date: state.date } : {});
     toast('更新しました。', 'ok');
   };
   $('btn-cache').onclick = () => openCache().catch((error) => toast(error.message, 'error'));
@@ -565,12 +598,12 @@ function bind() {
   const drop = $('drop');
   drop.addEventListener('dragover', (event) => {
     event.preventDefault();
-    drop.classList.add('dragging');
+    drop.classList.add('is-dragging');
   });
-  drop.addEventListener('dragleave', () => drop.classList.remove('dragging'));
+  drop.addEventListener('dragleave', () => drop.classList.remove('is-dragging'));
   drop.addEventListener('drop', (event) => {
     event.preventDefault();
-    drop.classList.remove('dragging');
+    drop.classList.remove('is-dragging');
     const file = event.dataTransfer.files[0];
     if (file) chooseFile(file);
   });
@@ -589,7 +622,7 @@ function bind() {
       input.value = '';
       const thread = await api(`/api/thread?collection=${encodeURIComponent(state.current)}&parent=${encodeURIComponent(state.viewer.message_id)}`);
       renderThread(thread.replies);
-      await loadFeed({ date: state.date });
+      await loadFeed(state.date ? { date: state.date } : {});
     } catch (error) {
       toast(`返信できません: ${error.message}`, 'error');
     } finally {
@@ -608,7 +641,7 @@ function bind() {
       });
       toast('削除しました。', 'ok');
       closeModals();
-      await loadFeed({ date: state.date });
+      await loadFeed(state.date ? { date: state.date } : {});
     } catch (error) {
       toast(`削除できません: ${error.message}`, 'error');
     }
