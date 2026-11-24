@@ -242,6 +242,7 @@ function videoCard(post) {
       ${caption ? `<div class="card-caption">${escapeHtml(caption)}</div>` : ''}
       <div class="card-time">${formatTime(post.posted_at)}</div>
     </div>`;
+  card.dataset.id = post.message_id;
   card.onclick = () => openViewer(post);
   return card;
 }
@@ -252,6 +253,7 @@ function chatRow(post) {
   row.innerHTML = `<span class="who-name">${escapeHtml(post.sender_name || '')}</span>
     <span class="who-text">${escapeHtml(post.text || (post.text_error ? '（復号できませんでした）' : ''))}</span>
     <span class="who-time">${formatTime(post.posted_at)}</span>`;
+  row.dataset.id = post.message_id;
   row.onclick = () => openViewer(post);
   return row;
 }
@@ -349,11 +351,11 @@ function renderViewerReactions(post) {
   box.appendChild(picker);
 }
 
-async function toggleReaction(post, text, remove) {
+async function toggleReaction(post, text, mine) {
   try {
     const result = await api('/api/reactions', {
       method: 'POST',
-      body: { collection_id: state.current, message_id: post.message_id, text, remove: !remove },
+      body: { collection_id: state.current, message_id: post.message_id, text, remove: Boolean(mine) },
     });
     post.reactions = result.reactions;
     post.own_reactions = result.reactions.filter((item) => item.user_id === state.me).map((item) => item.text);

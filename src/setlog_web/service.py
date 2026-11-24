@@ -16,6 +16,18 @@ from . import media_cache
 DEFAULT_ZONE = "Asia/Tokyo"
 DEFAULT_DAY_START = 4
 UPLOAD_DIR = client.STATE / "uploads"
+STATUS_TTL = 10.0
+COLLECTIONS_TTL = 15.0
+_CACHE: dict[str, tuple[float, object]] = {}
+
+
+def _cached(key: str, ttl: float, producer):
+    entry = _CACHE.get(key)
+    if entry is not None and time.time() - entry[0] < ttl:
+        return entry[1]
+    value = producer()
+    _CACHE[key] = (time.time(), value)
+    return value
 
 
 class BadRequest(Exception):
@@ -30,6 +42,11 @@ def _zone(name: str) -> ZoneInfo:
 
 
 def status() -> dict:
+    """認証状態と保存先の概要。短時間キャッシュしてAPI呼び出しを抑える。"""
+    return _cached("status", STATUS_TTL, _status)
+
+
+def _status() -> dict:
     state = client.STATE
     configured = True
     try:
@@ -74,6 +91,10 @@ def _profile() -> dict:
 
 
 def collections_view() -> dict:
+    return _cached("collections", COLLECTIONS_TTL, _collections_view)
+
+
+def _collections_view() -> dict:
     rooms = upload.collections()
     me = messages.user_id()
     items = []

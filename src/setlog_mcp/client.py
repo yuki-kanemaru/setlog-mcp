@@ -24,6 +24,11 @@ STATE = config.state_directory()
 BASE = "https://api.newchatapi.com/"
 _WRITE_LOCK = threading.Lock()
 
+# 2026-11時点で、setlogのAPIゲートウェイは未知のUser-Agentを一定回数で拒否する
+# （HTTP 403 RBAC: access denied）。アプリと同じOkHttpの表記を既定にし、
+# 環境変数 SETLOG_MCP_USER_AGENT で差し替えられるようにする。
+USER_AGENT = os.environ.get("SETLOG_MCP_USER_AGENT") or "okhttp/4.12.0"
+
 
 class SetlogError(Exception):
     """機密情報を含めず利用者へ表示できるエラー。"""
@@ -192,7 +197,7 @@ def api(
         "Content-Type": "application/json",
         "Accept": "application/json",
         "x-api-key": application_key,
-        "User-Agent": "setlog-mcp/" + __version__,
+        "User-Agent": USER_AGENT,
     }
     if token:
         headers["jwt-key"] = token
