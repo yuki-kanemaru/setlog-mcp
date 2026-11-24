@@ -143,8 +143,8 @@ def ensure_video(collection_id: str, message_id: str) -> Path:
         lock.release()
 
 
-def _build(collection_id: str, message_id: str, playable: Path) -> Path:
-    """復号して再生可能なMP4を作る（呼び出し側でロックと同時実行数を制御する）。"""
+def _decrypt_payload(collection_id: str, message_id: str) -> tuple[dict, dict, bytes]:
+    """投稿を読み戻し、メディアを復号して返す。"""
     session = client.load_private("session.bin")
     private = messages.identity_private()
     me = messages.user_id()
@@ -153,12 +153,41 @@ def _build(collection_id: str, message_id: str, playable: Path) -> Path:
         raise MediaUnavailable("削除された投稿です。")
     item = next((m for m in messages.media_items(stored) if m.get("path")), None)
     if item is None:
-        raise MediaUnavailable("この投稿に動画はありません。")
+        raise MediaUnavailable("この投稿にメディアはありません。")
     if item.get("permission") not in (None, "allow_saving"):
         raise MediaUnavailable("この投稿は保存が許可されていません。")
     content_key = messages.unwrap_key(stored, private, me)
     blob = media.download_media(item, session["token"])
-    plain = media.decrypt_media(stored, content_key, blob)
+    return stored, item, media.decrypt_media(stored, content_key, blob)
+
+
+def ensure_audio(collection_id: str, message_id: str) -> Path:
+    """音声投稿を復号して返す（変換はしない）。"""
+    key = _cache_key(collection_id, message_id)
+    target = CACHE_DIR / f"{key}.m4a"
+    if target.exists() and target.stat().st_size > 0:
+        os.utime(target, None)
+        return target
+    lock = _lock(key + ":audio")
+    with lock:
+        if target.exists() and target.stat().st_size > 0:
+            return target
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        _CONVERT_SLOTS.acquire()
+        try:
+            _stored, _item, plain = _decrypt_payload(collection_id, message_id)
+            temporary = target.with_suffix(".tmp")
+            temporary.write_bytes(plain)
+            temporary.replace(target)
+        finally:
+            _CONVERT_SLOTS.release()
+    evict()
+    return target
+
+
+def _build(collection_id: str, message_id: str, playable: Path) -> Path:
+    """復号して再生可能なMP4を作る（呼び出し側でロックと同時実行数を制御する）。"""
+    _stored, _item, plain = _decrypt_payload(collection_id, message_id)
     with tempfile.TemporaryDirectory(dir=CACHE_DIR) as temporary:
         source = Path(temporary) / "source.bin"
         source.write_bytes(plain)
@@ -194,7 +223,7 @@ def ensure_poster(collection_id: str, message_id: str) -> Path:
                     "-frames:v",
                     "1",
                     "-vf",
-                    "scale=400:-2:flags=lanczos",
+                    "scale=560:-2:flags=lanczos",
                     "-q:v",
                     "4",
                     str(target),

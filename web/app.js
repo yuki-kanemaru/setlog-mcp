@@ -239,7 +239,7 @@ function videoCard(post) {
 
   const poster = post.poster_url
     ? `<img src="${post.poster_url}" alt="" loading="lazy">`
-    : '';
+    : `<span class="card__tile">${post.has_audio ? '音声' : post.has_image ? '画像' : 'メディア'}</span>`;
   const caption = (post.media.flatMap((item) => item.captions || []).join(' ') || '').trim();
   const reactionChips = aggregateReactions(post.reactions)
     .slice(0, 3)
@@ -295,20 +295,25 @@ async function openViewer(post) {
   $('v-delete').classList.toggle('hidden', !post.is_mine);
 
   const video = $('viewer-video');
+  const audio = $('viewer-audio');
   const fallback = $('viewer-fallback');
   fallback.classList.add('hidden');
+  video.classList.add('hidden');
+  video.removeAttribute('src');
+  audio.classList.add('hidden');
+  audio.removeAttribute('src');
   if (post.video_url) {
     video.classList.remove('hidden');
     video.src = post.video_url;
     video.load();
     video.play().catch(() => {});
-  } else {
-    video.classList.add('hidden');
-    video.removeAttribute('src');
-    if (post.kind !== 'chat') {
-      fallback.textContent = 'この投稿に再生できる動画はありません。';
-      fallback.classList.remove('hidden');
-    }
+  } else if (post.audio_url) {
+    audio.classList.remove('hidden');
+    audio.src = post.audio_url;
+    audio.play().catch(() => {});
+  } else if (post.kind !== 'chat') {
+    fallback.textContent = 'この投稿に再生できるメディアはありません。';
+    fallback.classList.remove('hidden');
   }
 
   renderViewerReactions(post);
@@ -558,11 +563,14 @@ function openModal(id) {
 
 function closeModals() {
   for (const id of ['viewer', 'composer', 'cache-modal']) $(id).classList.add('hidden');
-  if (lastFocus && document.contains(lastFocus)) lastFocus.focus();
-  lastFocus = null;
   const video = $('viewer-video');
   video.pause();
   video.removeAttribute('src');
+  const audio = $('viewer-audio');
+  audio.pause();
+  audio.removeAttribute('src');
+  if (lastFocus && document.contains(lastFocus)) lastFocus.focus();
+  lastFocus = null;
 }
 
 function bind() {

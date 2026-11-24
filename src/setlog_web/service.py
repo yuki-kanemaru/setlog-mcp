@@ -158,11 +158,17 @@ def feed(
         post["has_image"] = any(
             item.get("path") and (item.get("mime") or "").startswith("image") for item in post["media"]
         )
+        post["has_audio"] = any(
+            item.get("path") and (item.get("mime") or "").startswith("audio") for item in post["media"]
+        )
         post["unread"] = (not post["is_mine"]) and me not in post.get("read_by", [])
         post["poster_url"] = (
             f"/api/media/{collection_id}/{post['message_id']}/poster" if post["has_video"] else None
         )
         post["video_url"] = f"/api/media/{collection_id}/{post['message_id']}" if post["has_video"] else None
+        post["audio_url"] = (
+            f"/api/media/{collection_id}/{post['message_id']}/audio" if post["has_audio"] else None
+        )
         post["own_reactions"] = [r["text"] for r in post.get("reactions", []) if r.get("user_id") == me]
     return {
         "posts": posts,
@@ -181,6 +187,10 @@ def video_path(collection_id: str, message_id: str) -> Path:
 
 def poster_path(collection_id: str, message_id: str) -> Path:
     return media_cache.ensure_poster(collection_id, message_id)
+
+
+def audio_path(collection_id: str, message_id: str) -> Path:
+    return media_cache.ensure_audio(collection_id, message_id)
 
 
 def _locked(function, *args, **kwargs):

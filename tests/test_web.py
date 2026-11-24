@@ -124,6 +124,16 @@ def test_media_unavailable_maps_to_404(client, monkeypatch):
     assert "削除" in response.json()["error"]
 
 
+def test_audio_route_serves_audio(client, monkeypatch, tmp_path):
+    _login(client)
+    sample = tmp_path / "sound.m4a"
+    sample.write_bytes(b"\x00" * 32)
+    monkeypatch.setattr(service, "audio_path", lambda collection, message: sample)
+    response = client.get("/api/media/c/m/audio")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("audio/mp4")
+
+
 def test_unknown_error_is_not_leaked(client, monkeypatch):
     _login(client)
     headers = {"x-setlog-token": web_app.TOKEN}

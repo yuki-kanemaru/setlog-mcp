@@ -189,6 +189,20 @@ async def api_poster(request: Request) -> Response:
     )
 
 
+async def api_audio(request: Request) -> Response:
+    collection = request.path_params["collection"]
+    message = request.path_params["message"]
+    try:
+        path = await asyncio.to_thread(service.audio_path, collection, message)
+    except Exception as error:  # noqa: BLE001
+        return _fail(error)
+    return FileResponse(
+        path,
+        media_type="audio/mp4",
+        headers={"Cache-Control": "private, max-age=3600"},
+    )
+
+
 async def api_reactions(request: Request) -> Response:
     try:
         body = await _body(request)
@@ -382,6 +396,7 @@ app = Starlette(
         Route("/api/cache", api_cache),
         Route("/api/cache/clear", api_clear_cache, methods=["POST"]),
         Route("/api/media/{collection}/{message}/poster", api_poster),
+        Route("/api/media/{collection}/{message}/audio", api_audio),
         Route("/api/media/{collection}/{message}", api_video),
         Mount("/static", StaticFiles(directory=str(asset_dir())), name="static"),
     ],
