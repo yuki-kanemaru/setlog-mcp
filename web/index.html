@@ -5,10 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="setlog-token" content="__SETLOG_TOKEN__">
 <title>setlog PC</title>
+<script>
+  (function () {
+    var saved = null;
+    try { saved = localStorage.getItem('setlog:view'); } catch (error) {}
+    var view = saved || (window.matchMedia('(max-width: 760px)').matches ? 'phone' : 'desktop');
+    document.documentElement.dataset.view = view;
+  })();
+</script>
 <link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/phone.css">
 </head>
 <body>
 
+<div id="view-desktop">
 <header class="app-bar">
   <div class="app-bar__inner">
     <div class="brand">
@@ -18,6 +28,7 @@
     </div>
     <p class="app-bar__user" id="who"></p>
     <div class="app-bar__actions">
+      <button class="btn btn--ghost" id="btn-view" type="button">スマホ表示</button>
       <button class="btn btn--ghost" id="btn-refresh" type="button">更新</button>
       <button class="btn btn--ghost" id="btn-cache" type="button">保存容量</button>
       <button class="btn btn--primary" id="btn-post" type="button">動画を投稿</button>
@@ -147,8 +158,94 @@
     </footer>
   </div>
 </div>
+</div><!-- /view-desktop -->
+
+<div id="view-phone" class="phone">
+  <div class="phone__screen">
+    <header class="phone-bar">
+      <button class="round-btn hidden" id="p-back" type="button" aria-label="戻る">←</button>
+      <h1 class="phone-bar__title" id="p-title">ログ</h1>
+      <span class="phone-bar__meta" id="p-meta"></span>
+      <button class="round-btn" id="p-view" type="button" aria-label="PC表示に切り替え">PC</button>
+    </header>
+
+    <main class="phone-main">
+      <section class="phone-page" id="p-home">
+        <ul class="log-rows" id="p-logs"></ul>
+        <p class="phone-empty hidden" id="p-logs-empty">参加しているログがありません。</p>
+      </section>
+
+      <section class="phone-page hidden" id="p-detail">
+        <div class="day-strip" id="p-days"></div>
+        <div class="thumb-grid" id="p-thumbs"></div>
+        <p class="phone-empty hidden" id="p-thumbs-empty">この日の投稿はありません。</p>
+      </section>
+
+      <section class="phone-page hidden" id="p-camera">
+        <div class="camera">
+          <p class="camera__title">カメラ</p>
+          <p class="camera__note">PCでは自動撮影はできません。動画を選んでログへ投稿できます。</p>
+          <button class="outline-btn" id="p-pick" type="button">動画を選んで投稿</button>
+        </div>
+      </section>
+    </main>
+
+    <nav class="switcher" aria-label="ページ切り替え">
+      <button class="switcher__dot" type="button" data-page="camera" aria-label="カメラ"></button>
+      <button class="switcher__dot is-active" type="button" data-page="home" aria-label="ログ"></button>
+    </nav>
+
+    <section class="player hidden" id="p-player" aria-label="再生">
+      <video id="p-video" playsinline loop controls></video>
+      <audio id="p-audio" controls class="hidden"></audio>
+      <div class="player__top">
+        <button class="round-btn round-btn--dark" id="p-player-back" type="button" aria-label="閉じる">←</button>
+        <span class="player__counter" id="p-counter"></span>
+      </div>
+      <div class="player__bottom">
+        <p class="player__who" id="p-who"></p>
+        <p class="player__caption" id="p-caption"></p>
+        <div class="player__reactions" id="p-reactions"></div>
+        <form class="player__reply" id="p-reply-form">
+          <input class="player__input" id="p-reply-input" maxlength="500" placeholder="返信を書く" autocomplete="off">
+          <button class="round-btn" type="submit" aria-label="返信を送る">↑</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="sheet hidden" id="p-composer" aria-label="動画を投稿">
+      <div class="sheet__body">
+        <header class="sheet__head">
+          <h2 class="sheet__title">動画を投稿</h2>
+          <button class="round-btn" id="p-composer-close" type="button" aria-label="閉じる">✕</button>
+        </header>
+        <label class="field">
+          <span class="field-label">動画</span>
+          <input class="input" type="file" id="p-file" accept="video/*">
+        </label>
+        <video id="p-local" class="sheet__preview hidden" muted loop playsinline></video>
+        <label class="field">
+          <span class="field-label">投稿先</span>
+          <select class="input" id="p-dest"></select>
+        </label>
+        <label class="field">
+          <span class="field-label">コメント（任意）</span>
+          <textarea class="input" id="p-comment" rows="3" maxlength="500"></textarea>
+        </label>
+        <div class="result hidden" id="p-result"></div>
+        <p class="sheet__status" id="p-status"></p>
+        <div class="sheet__actions">
+          <button class="outline-btn" id="p-prepare" type="button">準備する</button>
+          <button class="outline-btn outline-btn--fill hidden" id="p-send" type="button">送信する</button>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
 
 <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
+<script src="/static/core.js"></script>
 <script src="/static/app.js"></script>
+<script src="/static/phone.js"></script>
 </body>
 </html>

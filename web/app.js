@@ -1,9 +1,11 @@
-/* setlog PC — 画面ロジック（フレームワークなし） */
+/* setlog PC — デスクトップ表示のロジック（共通処理は core.js） */
 'use strict';
 
-const TOKEN = document.querySelector('meta[name="setlog-token"]').content;
 const $ = (id) => document.getElementById(id);
-const EMOJI = ['✨', '❤️', '🥺', '😍', '😂', '👏', '🔥', '👍'];
+const { api, toast, escapeHtml, EMOJI, pollTask, uploadWithProgress } = Setlog;
+const formatTime = Setlog.timeOf;
+const aggregateReactions = Setlog.aggregateReactions;
+const sleep = Setlog.sleep;
 
 const state = {
   me: '',
@@ -19,53 +21,6 @@ const state = {
   upload: null,
   prepared: null,
 };
-
-/* ---------------- API ---------------- */
-
-async function api(path, options = {}) {
-  const { method = 'GET', body = null, headers = {} } = options;
-  const init = { method, headers: { ...headers } };
-  if (method !== 'GET') init.headers['x-setlog-token'] = TOKEN;
-  if (body !== null) {
-    init.headers['Content-Type'] = 'application/json';
-    init.body = JSON.stringify(body);
-  }
-  const response = await fetch(path, init);
-  let payload = null;
-  try { payload = await response.json(); } catch { payload = null; }
-  if (!response.ok) {
-    const message = (payload && (payload.error || payload.message)) || `HTTP ${response.status}`;
-    const error = new Error(message);
-    error.status = response.status;
-    throw error;
-  }
-  return payload;
-}
-
-function toast(message, kind = '') {
-  const el = $('toast');
-  el.textContent = message;
-  el.className = 'toast' + (kind ? ` is-${kind}` : '');
-  clearTimeout(toast._timer);
-  toast._timer = setTimeout(() => el.classList.add('hidden'), kind === 'error' ? 6000 : 3200);
-}
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-function formatTime(iso) {
-  if (!iso) return '';
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '';
-  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-}
-
-function escapeHtml(value) {
-  return String(value || '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;');
-}
 
 /* ---------------- 起動 ---------------- */
 
@@ -272,15 +227,6 @@ function chatRow(post) {
   return row;
 }
 
-function aggregateReactions(list) {
-  const map = new Map();
-  for (const reaction of list || []) {
-    const entry = map.get(reaction.text) || [];
-    entry.push(reaction.user_id);
-    map.set(reaction.text, entry);
-  }
-  return Array.from(map.entries());
-}
 
 /* ---------------- 詳細 ---------------- */
 
@@ -439,36 +385,7 @@ function chooseFile(file) {
   $('preview').classList.add('hidden');
 }
 
-function uploadWithProgress(file, onProgress) {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', `/api/uploads?name=${encodeURIComponent(file.name || 'upload.mp4')}`);
-    xhr.setRequestHeader('x-setlog-token', TOKEN);
-    xhr.setRequestHeader('Content-Type', 'application/octet-stream');
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) onProgress(event.loaded / event.total);
-    };
-    xhr.onload = () => {
-      let payload = null;
-      try { payload = JSON.parse(xhr.responseText); } catch { payload = null; }
-      if (xhr.status >= 200 && xhr.status < 300) resolve(payload);
-      else reject(new Error((payload && payload.error) || `アップロードに失敗しました (${xhr.status})`));
-    };
-    xhr.onerror = () => reject(new Error('アップロード中に通信が切れました。'));
-    xhr.send(file);
-  });
-}
 
-async function pollTask(taskId, onTick) {
-  for (let index = 0; index < 900; index += 1) {
-    const record = await api(`/api/tasks/${taskId}`);
-    if (record.status === 'done') return record.result;
-    if (record.status === 'failed') throw new Error(record.error || '処理に失敗しました。');
-    if (onTick) onTick(record, index);
-    await sleep(700);
-  }
-  throw new Error('時間がかかっています。状態を確認してください（自動再送はしません）。');
-}
 
 async function preparePost() {
   if (!state.upload) {
@@ -579,6 +496,14 @@ function bind() {
     if (event.key === 'Escape') closeModals();
   });
 
+  const viewButton = $('btn-view');
+  if (viewButton) {
+    viewButton.onclick = () => {
+      localStorage.setItem('setlog:view', 'phone');
+      location.reload();
+    };
+  }
+
   $('btn-refresh').onclick = () => {
     if (state.current) loadFeed(state.date ? { date: state.date } : {});
     toast('更新しました。', 'ok');
@@ -683,5 +608,7 @@ function shiftDay(delta) {
   loadFeed({ date: state.date });
 }
 
-bind();
-boot();
+if (document.body.dataset.view !== 'phone') {
+  bind();
+  boot();
+}
