@@ -381,3 +381,21 @@ html[data-view="phone"] .toast { left: 50%; bottom: 72px; max-width: 380px; }
   .outline-btn:hover { background: var(--app-fill); }
   .player .reaction-picker button:hover { background: rgba(255, 255, 255, 0.12); }
 }
+/* 広い画面では端末のように中央へ置く（狭い画面はそのまま全画面） */
+@media (min-width: 900px) {
+  html[data-view="phone"] body { background: #e6e6e8; display: grid; place-items: center; min-height: 100dvh; }
+  .phone {
+    height: min(900px, calc(100dvh - 32px));
+    margin: 16px auto;
+    border-radius: var(--app-card);
+    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.14);
+    overflow: hidden;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+  }
+  html[data-view="phone"] .toast { bottom: 72px; }
+}
+
+@media (min-width: 900px) and (prefers-color-scheme: dark) {
+  html[data-view="phone"] body { background: #000; }
+  .phone { box-shadow: 0 20px 48px rgba(0, 0, 0, 0.6); border-color: rgba(255, 255, 255, 0.12); }
+}

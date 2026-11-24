@@ -9,8 +9,7 @@
   (function () {
     var saved = null;
     try { saved = localStorage.getItem('setlog:view'); } catch (error) {}
-    var view = saved || (window.matchMedia('(max-width: 760px)').matches ? 'phone' : 'desktop');
-    document.documentElement.dataset.view = view;
+    document.documentElement.dataset.view = saved === 'desktop' ? 'desktop' : 'phone';
   })();
 </script>
 <link rel="stylesheet" href="/static/style.css">
