@@ -284,8 +284,16 @@ Windowsのタスクスケジューラで定期実行する場合は、同じWind
 | `SETLOG_MCP_COUNTRY` | 撮影国の2文字コード | 未設定なら送信しない |
 | `SETLOG_MCP_FFPROBE` | ffprobeの実行ファイル | `ffprobe` |
 | `SETLOG_MCP_MAX_VIDEO_BYTES` | 準備できる動画の最大バイト数 | 268435456（256 MiB） |
+| `SETLOG_MCP_USER_AGENT` | APIへ送るUser-Agent | `okhttp/4.12.0` |
 
 保存地域は `ap-northeast-2` と `us-east-1` に対応します。撮影時のUTCオフセットは実行環境のタイムゾーンから取得します。動画はメモリー上で暗号化するため、大きい動画ではファイルサイズより多いメモリーを使います。
+
+### `HTTP 403: RBAC: access denied` になるとき
+
+setlogのAPIゲートウェイは、User-Agentによってリクエストを拒否することがあります。実際、`setlog-mcp/0.2.0` の表記は一定の利用後に403となり、同じキー・同じセッションでも `okhttp/4.12.0` では通ります。本文がJSONでない403は、アカウントの失効ではなくゲートウェイ側の拒否です。
+
+- 既定値はアプリと同じ `okhttp/4.12.0` です。`SETLOG_MCP_USER_AGENT` で変更できます。
+- 変更後は実行中のプロセス（MCPサーバーやWebアプリ）を再起動してください。読み込み済みの値は変わりません。
 
 ## CLI
 
