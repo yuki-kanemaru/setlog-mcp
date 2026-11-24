@@ -26,6 +26,8 @@ WEB_SAFE_AUDIO = {"aac", "mp3", "opus", "vorbis", None}
 
 _LOCKS: dict[str, threading.Lock] = {}
 _LOCKS_GUARD = threading.Lock()
+# 同時に走る復号・変換を絞り、setlog側への負荷と失敗を抑える。
+_CONVERT_SLOTS = threading.Semaphore(int(os.environ.get("SETLOG_WEB_CONCURRENCY", "2")))
 
 
 class MediaUnavailable(Exception):
@@ -132,32 +134,41 @@ def ensure_video(collection_id: str, message_id: str) -> Path:
         if playable.exists() and playable.stat().st_size > 0:
             return playable
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        session = client.load_private("session.bin")
-        private = messages.identity_private()
-        me = messages.user_id()
-        stored = messages.fetch_message(collection_id, message_id)
-        if stored.get("isDeleted"):
-            raise MediaUnavailable("削除された投稿です。")
-        item = next((m for m in messages.media_items(stored) if m.get("path")), None)
-        if item is None:
-            raise MediaUnavailable("この投稿に動画はありません。")
-        if item.get("permission") not in (None, "allow_saving"):
-            raise MediaUnavailable("この投稿は保存が許可されていません。")
-        content_key = messages.unwrap_key(stored, private, me)
-        blob = media.download_media(item, session["token"])
-        plain = media.decrypt_media(stored, content_key, blob)
-        with tempfile.TemporaryDirectory(dir=CACHE_DIR) as temporary:
-            source = Path(temporary) / "source.bin"
-            source.write_bytes(plain)
-            target = Path(temporary) / "converted.mp4"
-            convert_to_mp4(source, target)
-            if not target.exists() or target.stat().st_size == 0:
-                raise MediaUnavailable("動画を準備できませんでした。")
-            target.replace(playable)
-        evict()
-        return playable
+        _CONVERT_SLOTS.acquire()
+        try:
+            return _build(collection_id, message_id, playable)
+        finally:
+            _CONVERT_SLOTS.release()
     finally:
         lock.release()
+
+
+def _build(collection_id: str, message_id: str, playable: Path) -> Path:
+    """復号して再生可能なMP4を作る（呼び出し側でロックと同時実行数を制御する）。"""
+    session = client.load_private("session.bin")
+    private = messages.identity_private()
+    me = messages.user_id()
+    stored = messages.fetch_message(collection_id, message_id)
+    if stored.get("isDeleted"):
+        raise MediaUnavailable("削除された投稿です。")
+    item = next((m for m in messages.media_items(stored) if m.get("path")), None)
+    if item is None:
+        raise MediaUnavailable("この投稿に動画はありません。")
+    if item.get("permission") not in (None, "allow_saving"):
+        raise MediaUnavailable("この投稿は保存が許可されていません。")
+    content_key = messages.unwrap_key(stored, private, me)
+    blob = media.download_media(item, session["token"])
+    plain = media.decrypt_media(stored, content_key, blob)
+    with tempfile.TemporaryDirectory(dir=CACHE_DIR) as temporary:
+        source = Path(temporary) / "source.bin"
+        source.write_bytes(plain)
+        target = Path(temporary) / "converted.mp4"
+        convert_to_mp4(source, target)
+        if not target.exists() or target.stat().st_size == 0:
+            raise MediaUnavailable("動画を準備できませんでした。")
+        target.replace(playable)
+    evict()
+    return playable
 
 
 def ensure_poster(collection_id: str, message_id: str) -> Path:
