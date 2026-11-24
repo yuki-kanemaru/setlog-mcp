@@ -75,10 +75,14 @@ def test_save_log_media_writes_file_and_skips_forbidden(tmp_path, monkeypatch):
     )
     forbidden["media"]["permission"] = "deny_saving"
 
-    monkeypatch.setattr(client, "load_private", lambda name: {
-        "session.bin": {"token": "token"},
-        "identity.bin": {"userId": "me-id", "identityPrivateKeyB64": crypto.b64(me_private)},
-    }[name])
+    monkeypatch.setattr(
+        client,
+        "load_private",
+        lambda name: {
+            "session.bin": {"token": "token"},
+            "identity.bin": {"userId": "me-id", "identityPrivateKeyB64": crypto.b64(me_private)},
+        }[name],
+    )
 
     def fake_api(method, path, body=None, token=None, *, base=client.BASE):
         if path == "user/profile":

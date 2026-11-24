@@ -30,6 +30,7 @@ setlog-mcp = "setlog_mcp.__main__:main"
 setlog-auth = "setlog_mcp.client:main"
 setlog-upload = "setlog_mcp.upload:main"
 setlog-worker = "setlog_mcp.worker:main"
+setlog-web = "setlog_web.__main__:main"
 
 [project.urls]
 Repository = "https://github.com/shirafukayayoi/setlog-mcp"

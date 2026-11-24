@@ -20,7 +20,7 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from . import client, config, crypto, history, upload
+from . import client, config, crypto, history, messages, upload
 
 # Google Drive for desktop のショートカット先。環境変数で上書きできる。
 DEFAULT_SAVE_DIR = os.environ.get("SETLOG_SAVE_DIR") or (
@@ -41,58 +41,14 @@ def _safe_name(value: str, fallback: str = "unknown") -> str:
 
 def _iter_messages(collection_id: str, start_ms: int, end_ms: int, cap: int, token: str):
     """新しい順にメッセージを取得する。最大cap件。"""
-    cursor = ""
-    seen = 0
-    while seen < cap:
-        limit = min(PAGE_SIZE, cap - seen)
-        query = {"limit": limit, "beforeTimestamp": end_ms} if not cursor else {"limit": limit, "cursor": cursor}
-        path = "chat/" + urllib.parse.quote(collection_id, safe="") + "/messages?" + urllib.parse.urlencode(query)
-        response = client.api("GET", path, token=token)
-        messages = response.get("messages")
-        if not isinstance(messages, list):
-            raise client.SetlogError("投稿一覧の形式を確認できませんでした。")
-        if not messages:
-            return
-        for message in messages:
-            if not isinstance(message, dict):
-                raise client.SetlogError("投稿一覧の形式を確認できませんでした。")
-            seen += 1
-            yield message
-        if not response.get("hasMore"):
-            return
-        next_cursor = response.get("nextCursor")
-        if not isinstance(next_cursor, str) or not next_cursor or next_cursor == cursor:
-            return
-        cursor = next_cursor
-        oldest = min(int(message.get("timestamp", 0)) for message in messages)
-        if oldest < start_ms:
-            return
+    yield from messages.iter_messages(collection_id, start_ms, end_ms, cap, token)
 
 
 def _unwrap_content_key(message: dict, identity_private: bytes, me: str) -> bytes:
-    keys = message.get("keys")
-    if not isinstance(keys, list):
-        raise client.SetlogError("投稿の鍵情報を確認できませんでした。")
-    entry = next((item for item in keys if isinstance(item, dict) and item.get("uid") == me), None)
-    if entry is None:
-        raise client.SetlogError("自分宛ての鍵がない投稿です。")
-    sender = message.get("senderId")
-    content_type = message.get("contentType")
-    if not isinstance(sender, str) or not isinstance(content_type, str):
-        raise client.SetlogError("投稿の送信者または形式を確認できませんでした。")
-    aad = crypto.message_aad(
-        message.get("conversationId") or "", "media-key", sender, "application/octet-stream", 1
-    )
-    wrapping = crypto.derive(
-        identity_private,
-        crypto.unb64(entry.get("senderPublicKey")),
-        crypto.unb64(entry.get("saltB64")),
-        aad,
-    )
-    return crypto.decrypt(wrapping, crypto.unb64(entry.get("wrappedB64")), aad)
+    return messages.unwrap_key(message, identity_private, me)
 
 
-def _decrypt_media(message: dict, content_key: bytes, blob: bytes) -> bytes:
+def decrypt_media(message: dict, content_key: bytes, blob: bytes) -> bytes:
     sender = message.get("senderId")
     content_type = message.get("contentType")
     conversation = message.get("conversationId") or ""
@@ -109,7 +65,7 @@ def _decrypt_media(message: dict, content_key: bytes, blob: bytes) -> bytes:
     raise last or crypto.CryptoError("動画を復号できませんでした。")
 
 
-def _download(media: dict, token: str) -> bytes:
+def download_media(media: dict, token: str) -> bytes:
     region = media.get("region")
     base = REGION_BASE.get(region)
     if base is None:
@@ -128,13 +84,30 @@ def _download(media: dict, token: str) -> bytes:
         return response.read(config.max_video_bytes() + 1)
 
 
+# 既存の内部名との互換（テストと保存処理が参照する）。
+_download = download_media
+_decrypt_media = decrypt_media
+
+
 def _remux(source: Path, destination: Path) -> bool:
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
         return False
     result = subprocess.run(
-        [ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", str(source),
-         "-c", "copy", "-movflags", "+faststart", str(destination)],
+        [
+            ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            str(source),
+            "-c",
+            "copy",
+            "-movflags",
+            "+faststart",
+            str(destination),
+        ],
         capture_output=True,
     )
     return result.returncode == 0 and destination.is_file() and destination.stat().st_size > 0
@@ -177,7 +150,9 @@ def save_log_media(
                 names[str(uid)] = str(profile["name"])
 
     if start_date:
-        start_ms, end_ms = history.date_bounds(start_date, end_date or start_date, timezone_name, day_start_hour)
+        start_ms, end_ms = history.date_bounds(
+            start_date, end_date or start_date, timezone_name, day_start_hour
+        )
     else:
         start_ms, end_ms = 0, int(time.time() * 1000) + 1
 

@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="setlog-token" content="__SETLOG_TOKEN__">
+<title>setlog PC</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="glow"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark"></span>
+    <span class="brand-name">setlog</span>
+    <span class="brand-sub">PC</span>
+  </div>
+  <div class="who" id="who"></div>
+  <div class="top-actions">
+    <button class="ghost" id="btn-refresh">更新</button>
+    <button class="ghost" id="btn-cache">キャッシュ</button>
+    <button class="primary" id="btn-post">投稿</button>
+  </div>
+</header>
+
+<main class="layout">
+  <aside class="sidebar">
+    <div class="side-title">Log</div>
+    <div class="collections" id="collections"></div>
+    <div class="side-foot" id="side-foot"></div>
+  </aside>
+
+  <section class="content">
+    <div class="daybar" id="daybar"></div>
+    <div class="content-head">
+      <div>
+        <h1 id="collection-title">読み込み中…</h1>
+        <div class="meta" id="collection-meta"></div>
+      </div>
+      <div class="head-actions">
+        <button class="ghost small" id="btn-prev">◀ 前日</button>
+        <button class="ghost small" id="btn-next">翌日 ▶</button>
+      </div>
+    </div>
+    <div class="grid" id="grid"></div>
+    <div class="empty hidden" id="empty">この日の投稿はまだありません。</div>
+    <div class="section-head hidden" id="chat-head">チャット <span id="chat-count"></span></div>
+    <div class="chatlist" id="chatlist"></div>
+    <div class="loadmore"><button class="ghost hidden" id="btn-more">もっと見る</button></div>
+  </section>
+</main>
+
+<div class="modal hidden" id="viewer">
+  <div class="viewer-card">
+    <button class="close" data-close>✕</button>
+    <div class="viewer-stage">
+      <video id="viewer-video" playsinline loop controls></video>
+      <div class="viewer-fallback hidden" id="viewer-fallback">再生できませんでした。</div>
+    </div>
+    <div class="viewer-side">
+      <div class="post-head">
+        <span class="sender" id="v-sender"></span>
+        <span class="time" id="v-time"></span>
+      </div>
+      <p class="caption" id="v-caption"></p>
+      <div class="reactions" id="v-reactions"></div>
+      <div class="reply-title">返信 <span id="v-reply-count"></span></div>
+      <div class="reply-list" id="v-replies"></div>
+      <form class="reply-form" id="v-reply-form">
+        <input id="v-reply-input" maxlength="500" placeholder="返信を書く…" autocomplete="off">
+        <button class="primary" type="submit">送信</button>
+      </form>
+      <div class="viewer-foot">
+        <button class="ghost small hidden" id="v-delete">この投稿を削除</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal hidden" id="composer">
+  <div class="composer-card">
+    <header>
+      <h2>投稿する</h2>
+      <button class="close" data-close>✕</button>
+    </header>
+    <div class="drop" id="drop">
+      <input type="file" id="file" accept="video/*">
+      <div class="drop-hint" id="drop-hint">
+        <strong>動画をドロップ</strong>
+        <span>またはクリックして選択（MP4 / MOV）</span>
+      </div>
+      <video id="local-preview" muted loop playsinline class="hidden"></video>
+      <div class="upload-bar-wrap hidden" id="upload-wrap"><div class="upload-bar" id="upload-bar"></div></div>
+    </div>
+    <label class="field">
+      <span>投稿先</span>
+      <select id="dest"></select>
+    </label>
+    <label class="field">
+      <span>コメント</span>
+      <textarea id="comment" maxlength="500" rows="3" placeholder="動画に添える一言（任意）"></textarea>
+    </label>
+    <div class="preview hidden" id="preview"></div>
+    <footer>
+      <span class="hint" id="composer-status"></span>
+      <button class="primary" id="btn-prepare">準備する</button>
+      <button class="primary hidden" id="btn-send">送信する</button>
+    </footer>
+  </div>
+</div>
+
+<div class="modal hidden" id="cache-modal">
+  <div class="composer-card small-card">
+    <header>
+      <h2>キャッシュ</h2>
+      <button class="close" data-close>✕</button>
+    </header>
+    <div id="cache-body" class="cache-body"></div>
+    <footer>
+      <button class="ghost" id="btn-clear-cache">削除する</button>
+      <button class="primary" data-close>閉じる</button>
+    </footer>
+  </div>
+</div>
+
+<div class="toast hidden" id="toast"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

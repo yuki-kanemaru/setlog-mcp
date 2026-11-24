@@ -203,12 +203,25 @@ def api(
         with opener.open(request, timeout=30) as response:
             result = json.load(response)
     except urllib.error.HTTPError as exc:
+        raw_body = exc.read(8192)
+        error = {}
         try:
-            error = json.loads(exc.read(8192))
+            error = json.loads(raw_body)
         except (ValueError, UnicodeError):
             error = {}
-        # 応答全体やトークンを例外文へ含めない。
-        message = str(error.get("message") or error.get("error") or "API呼び出しに失敗しました。")
+        # 応答全体やトークンを例外文へ含めない。JSONでない場合も短い説明だけを残す。
+        message = ""
+        if isinstance(error, dict):
+            message = str(error.get("message") or error.get("error") or "")
+        if not message:
+            try:
+                text = raw_body.decode("utf-8", "replace").strip()
+            except Exception:
+                text = ""
+            if text and "<html" not in text.lower():
+                message = " ".join(text.split())[:160]
+        if not message:
+            message = "API呼び出しに失敗しました。"
         secrets = [application_key, token]
         if body:
             secrets.extend(body.get(field) for field in ("code", "email", "token", "password"))
